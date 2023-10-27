@@ -134,7 +134,7 @@ class EmotionState(nn.Module):
         return output
         
 
-
+### Final Model ###
 class AudioEmotionNet(nn.Module):
     def __init__(self):
         super(AudioEmotionNet, self).__init__()
