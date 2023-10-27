@@ -1,3 +1,0 @@
-Convert *.mp4 to *.wav
-Use torch.hub.load() to load pre-trained VGGish and run it on the audio file
-Do the Statistical Pooling

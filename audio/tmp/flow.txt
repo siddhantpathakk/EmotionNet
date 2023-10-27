@@ -1,0 +1,33 @@
+STEP (1): GENERATE AUDIO EMBEDDINGS
+    INPUT: audio file of utterances (*.mp4)
+
+    Convert *.mp4 to *.wav (probably using ffmpeg)
+    Use torch.hub.load() to load pre-trained VGGish and run it on the audio file
+    Do the Statistical Pooling
+
+    OUTPUT: utterance-wise representation of the audio file ([1, 384])
+------------------------------------------------------------------------------------------------------------------------
+STEP (2): PROPOSED MODEL
+    INPUT: utterance-wise representation of the audio file (N x [1, 384] for N utterances u)
+
+    Use the CumulativeContext(C), SelfSpeaker(S), IntraSpeaker(I), EmotionState(E) classes in models.py:
+        ## need to do the implementation ##
+        generate the output and hidden states with inter-dependencies between C, S, I, E
+
+        Update rules:
+            C_t  = f(C_t-1,  (S_t-1, I_t-1, u_t))
+            S_Kt = f(S_Kt-1, (C_Kt, u_Kt))
+            I_t  = f(I_t-1,  (a_t, u_t))             # a_t is the attention vector
+            E_t  = f(E_t-1,  (C_t, S_t, u_t))
+
+    OUTPUT: Emotion_State embeddings of each utterance [E_t]
+------------------------------------------------------------------------------------------------------------------------
+STEP (3): CLASSIFIER
+    INPUT: Emotion_State embeddings of each utterance [E_t]
+    
+    Use the AudioEmotionNet to classify the emotion of the utterance as the primary model
+    Combine all the steps in (2) above into this model as one, so can directly use this one only.
+
+    ## check what are residual connections in fully-connected layers (mentioned in paper) ##
+
+    OUTPUT: [emotion_label] of the utterance - one of the 7 emotions {anger, disgust, sadness, joy, neutral, surprise, fear}

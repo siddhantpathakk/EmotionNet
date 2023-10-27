@@ -2,7 +2,9 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 import numpy as np
+from torch.autograd import Variable
 
+### FOR AUDIO EMBEDDING ###
 
 class StatisticalUnit(nn.Module):
     def __init__(self, dim=0, keepdim=False):
@@ -29,6 +31,9 @@ class AudioEmbeddingNet(nn.Module):
         return utterance_wise_representation
 
 
+
+### MODELS FOR EMOTION RECOGNITION ###
+
 class CumulativeContext(nn.Module):
     """
     ### State Update Equations:
@@ -38,17 +43,32 @@ class CumulativeContext(nn.Module):
         I_t : intra-speaker state
         S_t : self-speaker state
         u_t : utterance embedding
-    
-    ### Soft attention:
-    a_t = sum(alpha_i * C_i) ->> contextual attention vector
-    alpha_i = softmax(u_i) 
-    u_i = tanh(W * C_i + b)
     """
-    def __init__(self):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True):
         super(CumulativeContext, self).__init__()
+
+        self.gru_c = nn.GRU(input_size=input_size, hidden_size=hidden_size, 
+                            num_layers=num_layers, bias=bias,
+                            bidrectional=True)
+    
     
     def forward(self, x):
-        pass
+        output, _ = self.gru_c(x)
+        output = output[:,-1, :]
+        return output     
+        
+        
+    def calculate_contextual_attention_vector(self, c):
+        """             
+        ### Soft attention:
+        a_t = sum(alpha_i * C_i) ->> contextual attention vector
+        alpha_i = softmax(u_i) 
+        u_i = tanh(W * C_i + b)
+        """
+        u_i = torch.tanh(self.W * c + self.b)
+        alpha_i = F.softmax(u_i)
+        a_t = torch.sum(alpha_i * c)
+        return a_t    
     
     
 class IntraSpeakerState(nn.Module):
@@ -60,11 +80,17 @@ class IntraSpeakerState(nn.Module):
         a_t : contextual attention vector (obtained from cumulative context state)
         u_t : utterance embedding
     """
-    def __init__(self):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True):
         super(IntraSpeakerState, self).__init__()
-
+        
+        self.gru_i = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, bias=bias,
+                            bidirectional=True)
+        
     def forward(self, x):
-        pass
+        output, _ = self.gru_i(x)
+        output = output[:,-1, :]
+        return output
+        
 
 
 class SelfSpeakerState(nn.Module):
@@ -96,19 +122,27 @@ class EmotionState(nn.Module):
         C_KT : cumulative context state of the Kth speaker at time T
         u_t : utterance embedding
     """    
-    def __init__(self):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True):
         super(EmotionState, self).__init__()
+        
+        self.gru_e = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, bias=bias,
+                            bidirectional=True)
 
     def forward(self, x):
-        pass
+        output, _ = self.gru_e(x)
+        output = output[:,-1, :]
+        return output
+        
 
 
 class AudioEmotionNet(nn.Module):
     def __init__(self):
         super(AudioEmotionNet, self).__init__()
+        
         self.attentivecontextual_state = CumulativeContext()
         self.intraspeaker_state = IntraSpeakerState()
         self.selfspeaker_state = SelfSpeakerState()
+        
         self.emotion_state = EmotionState()
         
         self.classifier = nn.Sequential(
