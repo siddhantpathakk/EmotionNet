@@ -1,0 +1,39 @@
+D_m = size of utterance embedding
+D_g = size of gru g
+D_p = size of party state vector / output dim of speaker gru_p
+D_e = size of emotion representation vector / output dim of emotion gru_e
+
+c_t = context vector
+u_t = current utterance 
+q_s = speaker state
+
+u_t.size = D_m
+q_s_t.size = D_p
+g_t.size = D_g
+e_t.size = D_e
+c_t.size = D_g
+
+
+global gru (gru_g)
+    g_t = GRU_g (g_t-1, (u_t CONCAT q_s_t-1)) 
+    [D_m + D_p] -> [D_g]
+
+
+speaker gru (gru_p)
+    alpha = softmax (u_t * W)   
+    c_t = alpha * [g1, g2 ... g_t-1]
+
+    q_s_t = GRU_p (q_s_t-1, (u_t CONCAT c_t))
+    [D_m + D_g] -> [D_p]
+
+
+emotion gru (gru_e)
+    e_t = GRU_e (e_t-1, q_s_t)
+    [D_p] -> [D_e]
+
+
+emotion classification (2-layer perceptron)
+    l_t = RELU (W_l * e_t + b_l)
+    P_t = softmax (W_smax * l_t + b_smax)
+    y_t = argmax (P_t)
+
