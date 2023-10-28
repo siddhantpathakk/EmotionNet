@@ -16,13 +16,12 @@ STEP (2): PROPOSED MODEL
 
         SIZES:
             u_t.size = N * [1,384]
-            C_t.size = 
 
         Update rules:
-            C_t  = GRU_c  (C_t-1,  (S_t-1, I_t-1, u_t))
-            S_Kt = GRU_sk (S_Kt-1, (C_Kt, u_Kt))
-            I_t  = GRU_i  (I_t-1,  (a_t, u_t))             # a_t is the attention vector
-            E_t  = GRU_e  (E_t-1,  (C_t, S_t, u_t))
+            G_t  = GRU_g  (G_t-1,  (S_t-1, I_t-1, u_t))
+            Q_Kt = GRU_sk (Q_Kt-1, (G_Kt, u_Kt))
+            I_t  = GRU_i  (I_t-1,  (c_t, u_t))             # a_t is the attention vector
+            E_t  = GRU_e  (E_t-1,  (G_t, S_t, u_t))
 
     OUTPUT: Emotion_State embeddings of each utterance [E_t]
 ------------------------------------------------------------------------------------------------------------------------
