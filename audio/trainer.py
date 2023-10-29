@@ -28,9 +28,12 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
         if train:
             optimizer.zero_grad()
 
-        r1, r2, r3, r4, qmask, umask, label = [d.cuda() for d in data[:-1]] if cuda else data[:-1]
+        # print(len(data))
+        # r1, r2, r3, r4, qmask, umask, label = [d.cuda() for d in data[:-1]] if cuda else data[:-1]
         
-        log_prob, alpha_f, alpha_b, _ = model(r1, r2, r3, r4, qmask, umask, return_hidden=False)
+        _, acouf, qmask, umask, label = [d.cuda() for d in data[:-1]] if cuda else data[:-1]
+                
+        log_prob, alpha_f, alpha_b = model(acouf, qmask, umask)
 
         lp_ = log_prob.transpose(0,1).contiguous().view(-1, log_prob.size()[2]) # batch*seq_len, n_classes
         labels_ = label.view(-1) # batch*seq_len
