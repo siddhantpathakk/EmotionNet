@@ -2,9 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
-from torch.autograd import Variable
-import numpy as np, itertools, random, copy, math
-
 
 class SimpleAttention(nn.Module):
 
@@ -34,26 +31,25 @@ class EmotionGRUCell(nn.Module):
         self.D_e = D_e # dimension of emotion state
         self.D_a = D_g # dimension of attention vector
         
-        # print(f'\ng_cell: {D_q}(D_q) + {D_m}(D_m) + {D_r}(D_r) => {D_g}(D_g)')
         self.g_cell = nn.GRUCell(D_q + D_m + D_r, D_g) # global cell
         
-        # print(f'p_cell: {D_g}(D_g) + {D_m}(D_m) => {D_q}(D_q)')
         self.p_cell = nn.GRUCell(D_g + D_m, D_q) # self speaker cell
         
-        # print(f'pl_cell: {D_q}(D_q) + {D_g}(D_g) => {D_q}(D_q)')
         self.pl_cell = nn.GRUCell(D_g + D_m, D_q) # self listener cell
         
-        # print(f'r_cell: {D_m}(D_m) + {D_g}(D_g) => {D_r}(D_r)')
         self.r_cell = nn.GRUCell(D_g + D_m, D_r) # intra-speaker cell
         
-        # print(f'e_cell: {D_m}(D_m) + {D_q}(D_q) + {D_g}(D_g) => {D_e}(D_e)')
+        self.rl_cell = nn.GRUCell(D_g + D_m, D_r) # intra-listener cell
+        
         self.e_cell = nn.GRUCell(D_m + D_q + D_g, D_e) # emotion cell
 
+        # dropout units
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
         self.dropout3 = nn.Dropout(dropout)
         self.dropout4 = nn.Dropout(dropout)
 
+        # attention layer
         self.attention = SimpleAttention(D_g)
         
     def _select_parties(self, X, indexes):
@@ -64,18 +60,23 @@ class EmotionGRUCell(nn.Module):
         return q0_sel
     
     def forward(self, U, qmask, g_hist, q0, r0, e0):
-        # batch_size, seq_len, = U.size()
+
+        
         qm_idx = torch.argmax(qmask, dim=1)
-        s0_sel = self._select_parties(q0, qm_idx)
+        
+        q0_sel = self._select_parties(q0, qm_idx)
         r0_sel = self._select_parties(r0, qm_idx)
         
+        
         ## global cumulative context state ##
-        inp_g = torch.cat([s0_sel, r0_sel, U], dim=1)
+        inp_g = torch.cat([q0_sel, r0_sel, U], dim=1)
+        
         if g_hist.size()[0] == 0:
             g_ = self.g_cell(inp_g, torch.zeros(U.size()[0], self.D_g).type(U.type()))
         else:
             g_ = self.g_cell(inp_g, g_hist[-1])
-
+        
+        
         ## context attention ##
         if g_hist.size()[0] == 0:
             c_ = torch.zeros(U.size()[0], self.D_a).type(U.type())
@@ -83,36 +84,47 @@ class EmotionGRUCell(nn.Module):
         else:
             c_, alpha = self.attention(g_hist)
         
+        
         ## intra speaker state ##
         inp_r = torch.cat([c_, U], dim=1).unsqueeze(1).expand(-1, qmask.size()[1], -1)
         rs_ = self.r_cell(inp_r.contiguous().view(-1, self.D_m + self.D_a), r0.view(-1, self.D_r)).view(U.size()[0], -1, self.D_r)
+        
         
         ## Self speaker state ##
         inp_p = torch.cat([U, g_], dim=1).unsqueeze(1).expand(-1,qmask.size()[1],-1)
         qs_ = self.p_cell(inp_p.contiguous().view(-1, self.D_m + self.D_g), q0.view(-1, self.D_q)).view(U.size()[0], -1, self.D_q)
         
+        
+        ## Intra listener state ##
+        inp_rl = torch.cat([c_, U], dim=1).unsqueeze(1).expand(-1, qmask.size()[1], -1)
+        rl_ = self.rl_cell(inp_rl.contiguous().view(-1, self.D_m + self.D_a), r0.view(-1, self.D_r)).view(U.size()[0], -1, self.D_r)
+        
+        
         ## Self listener state ##
-        ss_ = self._select_parties(qs_, qm_idx).unsqueeze(1).expand(-1, qmask.size()[1], -1).contiguous().view(-1, self.D_q)
-        # print(ss_.size())
-        # print(g_.size())
-        inp_pl = torch.cat([g_, ss_], dim=1)
-        ql_ = self.pl_cell(inp_pl, q0.view(-1, self.D_p)).view(U.size()[0], -1, self.D_q)
-    
+        ss_ = self._select_parties(qs_, qm_idx)
+        inp_pl = torch.cat([g_, ss_], dim=1).unsqueeze(1).expand(-1,qmask.size()[1],-1)
+        ql_ = self.pl_cell(inp_pl.contiguous().view(-1, self.D_m + self.D_g), q0.view(-1, self.D_q)).view(U.size()[0], -1, self.D_q)
+        
+        
+        ## Final self state ##
         qmask = qmask.unsqueeze(2)
         q_ = ql_ * qmask + qs_ * (1 - qmask)
-        r_ = rs_ * qmask
+        r_ = rs_ * qmask + rl_ * (1 - qmask)
+        
         
         ## Emotion state ##
         inp_e = torch.cat([U, self._select_parties(q_, qm_idx), self._select_parties(g_, qm_idx)], dim=1)
         if e0.size()[0]==0:
             e0 = torch.zeros(qmask.size()[0], self.D_e).type(U.type())
         e_ = self.e_cell(inp_e, e0)
-
+        
+        
         ## dropout ##
         g_ = self.dropout1(g_)
         q_ = self.dropout2(q_)
         r_ = self.dropout3(r_)
         e_ = self.dropout4(e_)
+        
         
         return g_, q_, r_, e_, alpha
         
@@ -139,8 +151,8 @@ class EmotionRNN(nn.Module):
         g_hist = torch.zeros(0).type(U.type())
         q_ = torch.zeros(qmask.size()[1], qmask.size()[2], self.D_q).type(U.type())
         r_ = torch.zeros(qmask.size()[1], qmask.size()[2], self.D_r).type(U.type())
-        
         e_ = torch.zeros(0).type(U.type())
+        
         e = e_
         
         alpha = []
@@ -164,7 +176,6 @@ class EmoNet(nn.Module):
     """
     def __init__(self, D_m, D_q, D_g, D_r, D_e, D_h, n_classes=7, dropout = 0.5):
         super(EmoNet, self).__init__()
-                
         self.D_m = D_m
         self.D_q = D_q
         self.D_g = D_g
@@ -173,8 +184,11 @@ class EmoNet(nn.Module):
         self.D_h = D_h
         self.n_classes = n_classes
 
+        
         self.dropout = nn.Dropout(dropout)
+        
         self.emo_rnn_b = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout)
+        
         self.emo_rnn_f = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout)
                 
         self.linear = nn.Linear(2 * D_e, n_classes)
@@ -191,12 +205,15 @@ class EmoNet(nn.Module):
         return pad_sequence(xfs)
     
     def forward(self, U, qmask, umask):
+        
         emotions_f, alpha_f = self.emo_rnn_f(U, qmask) # seq_len, batch, D_e
         
         rev_U = self._reverse_sequence(U, umask)
         rev_qmask = self._reverse_sequence(qmask, umask)
+
         emotions_b, alpha_b = self.emo_rnn_b(rev_U, rev_qmask)
         emotions_b = self._reverse_sequence(emotions_b, umask)
+                        
         emotions = torch.cat([emotions_f,emotions_b],dim=-1)
         
         hidden = F.tanh(self.linear(emotions))
