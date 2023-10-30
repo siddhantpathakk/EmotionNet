@@ -43,11 +43,8 @@ class EmotionGRUCell(nn.Module):
         
         self.e_cell = nn.GRUCell(D_m + D_q + D_g, D_e) # emotion cell
 
-        # dropout units
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.dropout3 = nn.Dropout(dropout)
-        self.dropout4 = nn.Dropout(dropout)
+        # dropout unit
+        self.dropout = nn.Dropout(dropout)
 
         # attention layer
         self.attention = SimpleAttention(D_g)
@@ -76,6 +73,7 @@ class EmotionGRUCell(nn.Module):
         else:
             g_ = self.g_cell(inp_g, g_hist[-1])
         
+        g_ = self.dropout(g_)
         
         ## context attention ##
         if g_hist.size()[0] == 0:
@@ -88,22 +86,25 @@ class EmotionGRUCell(nn.Module):
         ## intra speaker state ##
         inp_r = torch.cat([c_, U], dim=1).unsqueeze(1).expand(-1, qmask.size()[1], -1)
         rs_ = self.r_cell(inp_r.contiguous().view(-1, self.D_m + self.D_a), r0.view(-1, self.D_r)).view(U.size()[0], -1, self.D_r)
-        
+        rs_ = self.dropout(rs_)
         
         ## Self speaker state ##
         inp_p = torch.cat([U, g_], dim=1).unsqueeze(1).expand(-1,qmask.size()[1],-1)
         qs_ = self.p_cell(inp_p.contiguous().view(-1, self.D_m + self.D_g), q0.view(-1, self.D_q)).view(U.size()[0], -1, self.D_q)
-        
+        qs_ = self.dropout(qs_)
         
         ## Intra listener state ##
-        inp_rl = torch.cat([c_, U], dim=1).unsqueeze(1).expand(-1, qmask.size()[1], -1)
-        rl_ = self.rl_cell(inp_rl.contiguous().view(-1, self.D_m + self.D_a), r0.view(-1, self.D_r)).view(U.size()[0], -1, self.D_r)
-        
+        U_ = U.unsqueeze(1).expand(-1,qmask.size()[1],-1).contiguous().view(-1,self.D_m)
+        rss_ = self._select_parties(rs_, qm_idx).unsqueeze(1).expand(-1,qmask.size()[1],-1).contiguous().view(-1,self.D_r)
+        inp_rl = torch.cat([rss_, U_], dim=1)
+        rl_ = self.rl_cell(inp_rl, r0.view(-1, self.D_r)).view(U.size()[0], -1, self.D_r)
+        rl_ = self.dropout(rl_)
         
         ## Self listener state ##
-        ss_ = self._select_parties(qs_, qm_idx)
-        inp_pl = torch.cat([g_, ss_], dim=1).unsqueeze(1).expand(-1,qmask.size()[1],-1)
-        ql_ = self.pl_cell(inp_pl.contiguous().view(-1, self.D_m + self.D_g), q0.view(-1, self.D_q)).view(U.size()[0], -1, self.D_q)
+        ss_ = self._select_parties(qs_, qm_idx).unsqueeze(1).expand(-1,qmask.size()[1],-1).contiguous().view(-1,self.D_q)
+        inp_pl = torch.cat([U_,ss_],1)
+        ql_ = self.pl_cell(inp_pl, q0.view(-1, self.D_q)).view(U.size()[0], -1, self.D_q)
+        ql_ = self.dropout(ql_)
         
         
         ## Final self state ##
@@ -113,18 +114,12 @@ class EmotionGRUCell(nn.Module):
         
         
         ## Emotion state ##
-        inp_e = torch.cat([U, self._select_parties(q_, qm_idx), self._select_parties(g_, qm_idx)], dim=1)
+        inp_e = torch.cat([U, self._select_parties(q_, qm_idx),  g_], dim=1)
         if e0.size()[0]==0:
             e0 = torch.zeros(qmask.size()[0], self.D_e).type(U.type())
+            
         e_ = self.e_cell(inp_e, e0)
-        
-        
-        ## dropout ##
-        g_ = self.dropout1(g_)
-        q_ = self.dropout2(q_)
-        r_ = self.dropout3(r_)
-        e_ = self.dropout4(e_)
-        
+        e_ = self.dropout(e_)
         
         return g_, q_, r_, e_, alpha
         
@@ -190,8 +185,9 @@ class EmoNet(nn.Module):
         self.emo_rnn_b = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout)
         
         self.emo_rnn_f = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout)
-                
-        self.linear = nn.Linear(2 * D_e, n_classes)
+        
+        # print(f'Linear input: {2 * D_e}')
+        self.linear = nn.Linear(2 * D_e, D_h)
         self.smax_fc = nn.Linear(D_h, n_classes)
         
     def _reverse_sequence(self, X, mask):
@@ -216,7 +212,11 @@ class EmoNet(nn.Module):
                         
         emotions = torch.cat([emotions_f,emotions_b],dim=-1)
         
-        hidden = F.tanh(self.linear(emotions))
+        # print(f'Emotions shape: {emotions.shape}')
+        
+        hidden = self.linear(emotions)
+        
         hidden = self.dropout(hidden)
+        
         log_prob = F.log_softmax(self.smax_fc(hidden), 2) # seq_len, batch, n_classes
         return log_prob, alpha_f, alpha_b
