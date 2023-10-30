@@ -161,3 +161,7 @@ cython_debug/
 
 audio/tmp/
 # audio/MELD_features/
+
+*.DS_Store
+*.DS_Store
+.DS_Store

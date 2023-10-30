@@ -1,0 +1,2 @@
+train_losses,train_fscores,train_accs,val_losses,val_fscores,val_accs,test_losses,test_fscores,test_accs
+2.7716,29.27,30.2,1.5631,30.62,47.45,1.5487,31.7,48.2

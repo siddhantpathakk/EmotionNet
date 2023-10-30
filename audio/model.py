@@ -213,6 +213,8 @@ class EmotionNet(nn.Module):
         emotions_b, alpha_b = self.emo_rnn_b(rev_U, rev_qmask)
         emotions_b = self._reverse_sequence(emotions_b, umask)
                         
+        # print(f'Emotions forward shape: {emotions_f.shape}')
+        # print(f'Emotions backward shape: {emotions_b.shape}')
         emotions = torch.cat([emotions_f,emotions_b],dim=-1)
         
         # print(f'Emotions shape: {emotions.shape}')
