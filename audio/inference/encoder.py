@@ -42,7 +42,7 @@ def get_emb_from_audio(audio_array):
 def get_audio_from_mp4(video_filename):
     filename, _ = os.path.splitext(video_filename)
     clip = VideoFileClip(video_filename)
-    clip.audio.write_audiofile(f"{filename}.wav")
+    clip.audio.write_audiofile(f"{filename}.wav", verbose=False, logger=None)
     return f"{filename}.wav"
     
 def get_audio_emb_from_one_mp4(video_filename):
