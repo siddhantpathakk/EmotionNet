@@ -163,14 +163,14 @@ class EmotionRNN(nn.Module):
         return e, alpha
     
 
-class EmoNet(nn.Module):
+class EmotionNet(nn.Module):
     """
     High level model that handles intializing the underlying network
     architecture, saving, updating examples, and predicting emotions
     using the EmotionRNN and a two-layer MLP.
     """
     def __init__(self, D_m, D_q, D_g, D_r, D_e, D_h, n_classes=7, dropout = 0.5):
-        super(EmoNet, self).__init__()
+        super(EmotionNet, self).__init__()
         self.D_m = D_m
         self.D_q = D_q
         self.D_g = D_g
@@ -188,7 +188,10 @@ class EmoNet(nn.Module):
         
         # print(f'Linear input: {2 * D_e}')
         self.linear = nn.Linear(2 * D_e, D_h)
+        nn.init.kaiming_normal_(self.linear.weight)
+        
         self.smax_fc = nn.Linear(D_h, n_classes)
+        nn.init.kaiming_normal_(self.smax_fc.weight)
         
     def _reverse_sequence(self, X, mask):
         X_ = X.transpose(0,1)
