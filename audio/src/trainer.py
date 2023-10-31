@@ -204,8 +204,24 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
               f'Test Acc: {test_acc:.3f}%\t',
               f'Test F1: {test_fscore:.3f}\t',
               
-              f'Time: {time.time()-start_time:.2f} sec'
+              f'Time: {time.time()-start_time:.2f} sec '
               )
+        
+        #### early stopping
+        min_delta = 0.01
+        patience = 5
+        
+        if e > 0:
+            if test_losses[-1] - test_losses[-2] > min_delta:
+                patience_cnt += 1
+            else:
+                patience_cnt = 0
+                
+            if patience_cnt > patience:
+                print("Early stopping at epoch: ", e)
+                break
+        else:
+            patience_cnt = 0
 
 
     train_metrics = {'train_losses': train_losses, 
