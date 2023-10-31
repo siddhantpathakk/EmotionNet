@@ -62,7 +62,7 @@ def get_train_valid_sampler(trainset, valid=0.1):
     split = int(valid*size)
     return SubsetRandomSampler(idx[split:]), SubsetRandomSampler(idx[:split])
 
-def get_MELD_loaders(path, n_classes, batch_size=32, valid=0.1, num_workers=0, pin_memory=False):
+def get_MELD_loaders(path, n_classes, batch_size=30, valid=0.1, num_workers=0, pin_memory=False):
     trainset = MELDDataset(split='train', path=path)
     train_sampler, valid_sampler = get_train_valid_sampler(trainset, valid)
     train_loader = DataLoader(trainset,
