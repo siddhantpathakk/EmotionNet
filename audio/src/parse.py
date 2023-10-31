@@ -26,7 +26,7 @@ def parse_opt():
     parser.add_argument('--seed', type=int, default=42, metavar='seed', help='seed')
     
     parser.add_argument('--feature_type', type=str, default='audio', help='features (text or audio or multimodal)')
-    parser.add_argument('--attention', type=str, default='general', help='attention type (simple or general or general2 or concat or dot)')
+    parser.add_argument('--attention', type=str, default='simple', help='attention type (simple or general or general2 or concat or dot)')
     
     parser.add_argument('--verbose', action='store_true', default=True, help='verbose (true or false)')
 

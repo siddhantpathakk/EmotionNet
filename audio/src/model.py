@@ -37,7 +37,10 @@ class EmotionGRUCell(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # attention layer
-        self.attention = SimpleAttention(D_g) if attention == 'simple' else MatchingAttention(D_g, D_m, D_g, att_type=attention)
+        if attention == 'simple':
+            self.attention = SimpleAttention(D_g) 
+        else:
+            self.attention = MatchingAttention(D_g, D_m, D_g, att_type=attention)
         
     def _select_parties(self, X, indexes):
         q0_sel = []

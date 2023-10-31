@@ -20,7 +20,7 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
           
 
-def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None, train=False, cuda=False, feature_type="audio"):
+def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None, train=False, cuda=False, feature_type='audio'):
     losses = []
     preds = []
     labels = []
@@ -45,6 +45,8 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
             
         textf, acouf, qmask, umask, label = [d.to('cuda') for d in data[:-1]] if cuda else data[:-1]
 
+        # log_prob, alpha_f, alpha_b = model(acouf, qmask,umask) # seq_len, batch, n_classes
+        
         if feature_type == "audio":
             log_prob, alpha_f, alpha_b = model(acouf, qmask,umask) # seq_len, batch, n_classes
         elif feature_type == "text":
@@ -52,8 +54,7 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
         else:
             log_prob, alpha_f, alpha_b = model(torch.cat((textf,acouf),dim=-1), qmask,umask) # seq_len, batch, n_classes
 
-        log_prob, alpha_f, alpha_b = model(acouf, qmask,umask) # seq_len, batch, n_classes
-
+        
         lp_ = log_prob.transpose(0,1).contiguous().view(-1,log_prob.size()[2]) # batch*seq_len, n_classes
         labels_ = label.view(-1) # batch*seq_len
         loss = loss_function(lp_, labels_, umask)
@@ -77,7 +78,7 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
         labels = np.concatenate(labels)
         masks  = np.concatenate(masks)
     else:
-        return float('nan'), float('nan'), [], [], [], float('nan'),[], []
+        return float('nan'), float('nan'), [], [], [], float('nan'),[]
 
     avg_loss = round(np.sum(losses)/np.sum(masks),4)
     avg_accuracy = round(accuracy_score(labels,preds,sample_weight=masks)*100,2)
@@ -89,16 +90,18 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
 def build_model(D_m, D_q, D_g, D_r, D_e, D_h, args):
     
     seed_everything(args.seed)
-    model = EmotionNet(D_m, D_q, D_g, D_r, D_e, D_h, n_classes=args.n_classes, dropout=args.dropout, attention=args.attention)
+    model = EmotionNet(D_m, D_q, D_g, D_r, D_e, D_h, n_classes=args.n_classes, dropout=args.dropout)
+    
     
     if args.optimizer == 'adam':
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.l2)
     elif args.optimizer == 'sgd':
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.l2)
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.l2)
     elif args.optimizer == 'rmsprop':
-        optimizer = torch.optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=args.l2)
-    
-    
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.l2)
+    else:
+        raise Exception('Unknown optimizer {}'.format(args.optimizer))
+        
     if args.class_weight:
         if args.mu > 0:
             loss_weights = torch.FloatTensor(create_class_weight(args.mu))
@@ -165,35 +168,29 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
     
     for e in range(args.epochs):
         start_time = time.time()
-        train_loss, train_acc, _,_,_,train_fscore,_,_ = train_or_eval_model(model=model, 
-                                                                            loss_function=loss_function,
-                                                                            dataloader=train_loader, epoch=e, 
-                                                                            optimizer=optimizer, train=True, cuda=args.cuda, 
-                                                                            feature_type=args.feature_type)
-        
-        valid_loss, valid_acc, _,_,_,val_fscore,_,_ = train_or_eval_model(model=model, 
-                                                                          loss_function=loss_function, 
-                                                                          dataloader=valid_loader, epoch=e,cuda=args.cuda, 
-                                                                          feature_type=args.feature_type)
-        # test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, attentions, test_class_report = train_or_eval_model(model=model, loss_function=loss_function, dataloader=test_loader, epoch=e, train=False, cuda=args.cuda, feature_type=args.feature_type)
-        # avg_loss, avg_accuracy, labels, preds, masks, avg_fscore, [alphas_f, alphas_b, vids], class_report
+        train_loss, train_acc, _,_,_,train_fscore,_,_= train_or_eval_model(model=model, loss_function=loss_function,dataloader=train_loader, epoch=e, optimizer=optimizer, train=True, cuda=args.cuda, feature_type=args.feature_type)
+        valid_loss, valid_acc, _,_,_,val_fscore,_, _= train_or_eval_model(model=model, loss_function=loss_function, dataloader=valid_loader, epoch=e,cuda=args.cuda, feature_type=args.feature_type)
+        test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, attentions, test_class_report = train_or_eval_model(model=model, loss_function=loss_function, dataloader=test_loader, epoch=e, train=False, cuda=args.cuda, feature_type=args.feature_type)
+
 
         train_losses.append(train_loss)
         train_fscores.append(train_fscore)
         train_accs.append(train_acc)
         
- 
+        test_losses.append(test_loss)
+        test_fscores.append(test_fscore)
+        test_accs.append(test_acc)
         
         val_losses.append(valid_loss)
         val_fscores.append(val_fscore)
         val_accs.append(valid_acc)
         
 
-        # if best_fscore == None or best_fscore < val_fscore :
-        #     best_fscore, best_loss, best_label, best_pred, best_mask, best_attn = val_fscore, test_loss, test_label, test_pred, test_mask, attentions
+        if best_fscore == None or best_fscore < test_fscore :
+            best_fscore, best_loss, best_label, best_pred, best_mask, best_attn = test_fscore, test_loss, test_label, test_pred, test_mask, attentions
 
 
-        print(f'Epoch\t[{e+1}]\t',
+        print(f'Epoch [{e+1}]/[{args.epochs}]\t',
               
               f'Train Loss: {train_loss:.3f}\t',
               f'Train Acc: {train_acc:.3f}%\t',
@@ -203,19 +200,13 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
               f'Val Acc: {valid_acc:.3f}%\t',
               f'Val F1: {val_fscore:.3f}\t',
               
-            #   f'Test Loss: {test_loss:.3f}\t',
-            #   f'Test Acc: {test_acc:.3f}%\t',
-            #   f'Test F1: {test_fscore:.3f}\t',
+              f'Test Loss: {test_loss:.3f}\t',
+              f'Test Acc: {test_acc:.3f}%\t',
+              f'Test F1: {test_fscore:.3f}\t',
               
-              f'Time: {time.time()-start_time:.2f} sec '
+              f'Time: {time.time()-start_time:.2f} sec'
               )
 
-
-    test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, t_attentions, test_class_report = train_or_eval_model(model=model, loss_function=loss_function, dataloader=test_loader, epoch=e, train=False, cuda=args.cuda, feature_type=args.feature_type)
-
-    test_losses.append(test_loss)
-    test_fscores.append(test_fscore)
-    test_accs.append(test_acc)
 
     train_metrics = {'train_losses': train_losses, 
                      'train_fscores': train_fscores, 
@@ -232,15 +223,15 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
                    'val_accs': val_accs
                    }
     
-    # best_metrics = {'best_loss': best_loss, 
-    #                 'best_fscore': best_fscore, 
-    #                 'best_acc': accuracy_score(best_label,best_pred,sample_weight=best_mask)*100
-    #                 }
+    best_metrics = {'best_loss': best_loss, 
+                    'best_fscore': best_fscore, 
+                    'best_acc': accuracy_score(best_label,best_pred,sample_weight=best_mask)*100
+                    }
     
     metrics = {'train': train_metrics, 
                'val': val_metrics, 
                'test': test_metrics, 
-            #    'best': best_metrics
+               'best': best_metrics
                }
     
-    return model, metrics, test_label, test_pred, test_mask, t_attentions, test_class_report
+    return model, metrics, best_label, best_pred, best_mask, best_attn, test_class_report
