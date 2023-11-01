@@ -165,3 +165,5 @@ audio/tmp/
 *.DS_Store
 *.DS_Store
 .DS_Store
+
+audio/src/inference/

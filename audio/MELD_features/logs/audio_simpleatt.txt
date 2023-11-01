@@ -1,0 +1,22 @@
+Epoch [1]/[50]	 Train Loss: 2.397	 Train Acc: 18.400%	 Train F1: 21.870	 Val Loss: 1.942	 Val Acc: 20.540%	 Val F1: 22.140	 Test Loss: 1.959	 Test Acc: 17.320%	 Test F1: 19.520	 Time: 22.79 sec 
+Epoch [10]/[50]	 Train Loss: 2.121	 Train Acc: 16.970%	 Train F1: 19.440	 Val Loss: 1.882	 Val Acc: 21.760%	 Val F1: 25.620	 Test Loss: 1.908	 Test Acc: 17.550%	 Test F1: 20.290	 Time: 22.56 sec 
+Epoch [20]/[50]	 Train Loss: 2.050	 Train Acc: 18.840%	 Train F1: 22.020	 Val Loss: 1.869	 Val Acc: 29.880%	 Val F1: 32.340	 Test Loss: 1.875	 Test Acc: 25.020%	 Test F1: 24.820	 Time: 20.91 sec 
+Epoch [30]/[50]	 Train Loss: 1.987	 Train Acc: 21.000%	 Train F1: 23.810	 Val Loss: 1.856	 Val Acc: 30.070%	 Val F1: 32.420	 Test Loss: 1.867	 Test Acc: 25.520%	 Test F1: 25.300	 Time: 21.34 sec 
+Epoch [40]/[50]	 Train Loss: 1.951	 Train Acc: 21.940%	 Train F1: 24.590	 Val Loss: 1.850	 Val Acc: 28.760%	 Val F1: 31.440	 Test Loss: 1.862	 Test Acc: 24.440%	 Test F1: 24.280	 Time: 19.21 sec 
+Epoch [50]/[50]	 Train Loss: 1.930	 Train Acc: 23.010%	 Train F1: 25.470	 Val Loss: 1.827	 Val Acc: 30.440%	 Val F1: 33.020	 Test Loss: 1.868	 Test Acc: 24.560%	 Test F1: 24.940	 Time: 19.59 sec 
+
+[Classification report]:
+
+              precision    recall  f1-score   support
+
+           0     0.5992    0.2404    0.3432    1256.0
+           1     0.2018    0.3167    0.2465     281.0
+           2     0.0167    0.0800    0.0277      50.0
+           3     0.1321    0.1683    0.1480     208.0
+           4     0.1917    0.0920    0.1244     402.0
+           5     0.0206    0.0882    0.0334      68.0
+           6     0.2644    0.5188    0.3503     345.0
+
+    accuracy                         0.2498    2610.0
+   macro avg     0.2038    0.2149    0.1819    2610.0
+weighted avg     0.3859    0.2498    0.2703    2610.0
