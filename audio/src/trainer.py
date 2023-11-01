@@ -90,7 +90,7 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
 def build_model(D_m, D_q, D_g, D_r, D_e, D_h, args):
     
     seed_everything(args.seed)
-    model = EmotionNet(D_m, D_q, D_g, D_r, D_e, D_h, n_classes=args.n_classes, dropout=args.dropout)
+    model = EmotionNet(D_m, D_q, D_g, D_r, D_e, D_h, n_classes=args.n_classes, dropout=args.dropout, attention=args.attention)
     
     
     if args.optimizer == 'adam':
@@ -166,7 +166,7 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
     val_losses, val_fscores, val_accs = [], [], []
     best_fscore, best_loss, best_label, best_pred, best_mask, best_attn = None, None, None, None, None, None
     
-    for e in range(args.epochs):
+    for e in range(1, args.epochs+1):
         start_time = time.time()
         train_loss, train_acc, _,_,_,train_fscore,_,_= train_or_eval_model(model=model, loss_function=loss_function,dataloader=train_loader, epoch=e, optimizer=optimizer, train=True, cuda=args.cuda, feature_type=args.feature_type)
         valid_loss, valid_acc, _,_,_,val_fscore,_, _= train_or_eval_model(model=model, loss_function=loss_function, dataloader=valid_loader, epoch=e,cuda=args.cuda, feature_type=args.feature_type)
@@ -190,35 +190,36 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
             best_fscore, best_loss, best_label, best_pred, best_mask, best_attn = test_fscore, test_loss, test_label, test_pred, test_mask, attentions
 
 
-        print(f'Epoch [{e+1}]/[{args.epochs}]\t',
-              
-              f'Train Loss: {train_loss:.3f}\t',
-              f'Train Acc: {train_acc:.3f}%\t',
-              f'Train F1: {train_fscore:.3f}\t',
-              
-              f'Val Loss: {valid_loss:.3f}\t',
-              f'Val Acc: {valid_acc:.3f}%\t',
-              f'Val F1: {val_fscore:.3f}\t',
-              
-              f'Test Loss: {test_loss:.3f}\t',
-              f'Test Acc: {test_acc:.3f}%\t',
-              f'Test F1: {test_fscore:.3f}\t',
-              
-              f'Time: {time.time()-start_time:.2f} sec '
-              )
+        if e % 10 == 0 or e == 1:
+            print(f'Epoch [{e}]/[{args.epochs}]\t',
+                
+                f'Train Loss: {train_loss:.3f}\t',
+                f'Train Acc: {train_acc:.3f}%\t',
+                f'Train F1: {train_fscore:.3f}\t',
+                
+                f'Val Loss: {valid_loss:.3f}\t',
+                f'Val Acc: {valid_acc:.3f}%\t',
+                f'Val F1: {val_fscore:.3f}\t',
+                
+                f'Test Loss: {test_loss:.3f}\t',
+                f'Test Acc: {test_acc:.3f}%\t',
+                f'Test F1: {test_fscore:.3f}\t',
+                
+                f'Time: {time.time()-start_time:.2f} sec '
+                )
         
         #### early stopping
         min_delta = 0.01
         patience = 5
         
-        if e > 0:
+        if e > 1:
             if test_losses[-1] - test_losses[-2] > min_delta:
                 patience_cnt += 1
             else:
                 patience_cnt = 0
                 
             if patience_cnt > patience:
-                print("Early stopping at epoch: ", e)
+                print(f"[Early stopping at epoch: {e}]")
                 break
         else:
             patience_cnt = 0

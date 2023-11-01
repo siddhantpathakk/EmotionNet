@@ -12,7 +12,7 @@ class SimpleAttention(nn.Module):
         self.scalar = nn.Linear(self.input_dim,1,bias=False)
 
     def forward(self, C, x=None):
-        scale = self.scalar(C) 
+        scale = F.tanh(self.scalar(C))
         alpha = F.softmax(scale, dim=0).permute(1,2,0) 
         attn_pool = torch.bmm(alpha, C.transpose(0,1))[:,0,:] 
         return attn_pool, alpha
