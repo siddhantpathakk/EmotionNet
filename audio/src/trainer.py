@@ -20,7 +20,7 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
           
 
-def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None, train=False, cuda=False):
+def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None, train=False, cuda=False, feature_type='audio'):
     losses = []
     preds = []
     labels = []
@@ -45,8 +45,16 @@ def train_or_eval_model(model, loss_function, dataloader, epoch, optimizer=None,
             
         textf, acouf, qmask, umask, label = [d.to('cuda') for d in data[:-1]] if cuda else data[:-1]
 
-        log_prob, alpha_f, alpha_b = model(acouf, qmask,umask) # seq_len, batch, n_classes
+        # log_prob, alpha_f, alpha_b = model(acouf, qmask,umask) # seq_len, batch, n_classes
+        
+        if feature_type == "audio":
+            log_prob, alpha_f, alpha_b = model(acouf, qmask,umask) # seq_len, batch, n_classes
+        elif feature_type == "text":
+            log_prob, alpha_f, alpha_b = model(textf, qmask,umask) # seq_len, batch, n_classes
+        else:
+            log_prob, alpha_f, alpha_b = model(torch.cat((textf,acouf),dim=-1), qmask,umask) # seq_len, batch, n_classes
 
+        
         lp_ = log_prob.transpose(0,1).contiguous().view(-1,log_prob.size()[2]) # batch*seq_len, n_classes
         labels_ = label.view(-1) # batch*seq_len
         loss = loss_function(lp_, labels_, umask)
@@ -83,8 +91,17 @@ def build_model(D_m, D_q, D_g, D_r, D_e, D_h, args):
     
     seed_everything(args.seed)
     model = EmotionNet(D_m, D_q, D_g, D_r, D_e, D_h, n_classes=args.n_classes, dropout=args.dropout)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.l2)
     
+    
+    if args.optimizer == 'adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.l2)
+    elif args.optimizer == 'sgd':
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.l2)
+    elif args.optimizer == 'rmsprop':
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.l2)
+    else:
+        raise Exception('Unknown optimizer {}'.format(args.optimizer))
+        
     if args.class_weight:
         if args.mu > 0:
             loss_weights = torch.FloatTensor(create_class_weight(args.mu))
@@ -151,9 +168,9 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
     
     for e in range(args.epochs):
         start_time = time.time()
-        train_loss, train_acc, _,_,_,train_fscore,_,_= train_or_eval_model(model=model, loss_function=loss_function,dataloader=train_loader, epoch=e, optimizer=optimizer, train=True, cuda=args.cuda)
-        valid_loss, valid_acc, _,_,_,val_fscore,_, _= train_or_eval_model(model=model, loss_function=loss_function, dataloader=valid_loader, epoch=e,cuda=args.cuda)
-        test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, attentions, test_class_report = train_or_eval_model(model=model, loss_function=loss_function, dataloader=test_loader, epoch=e, train=False, cuda=args.cuda)
+        train_loss, train_acc, _,_,_,train_fscore,_,_= train_or_eval_model(model=model, loss_function=loss_function,dataloader=train_loader, epoch=e, optimizer=optimizer, train=True, cuda=args.cuda, feature_type=args.feature_type)
+        valid_loss, valid_acc, _,_,_,val_fscore,_, _= train_or_eval_model(model=model, loss_function=loss_function, dataloader=valid_loader, epoch=e,cuda=args.cuda, feature_type=args.feature_type)
+        test_loss, test_acc, test_label, test_pred, test_mask, test_fscore, attentions, test_class_report = train_or_eval_model(model=model, loss_function=loss_function, dataloader=test_loader, epoch=e, train=False, cuda=args.cuda, feature_type=args.feature_type)
 
 
         train_losses.append(train_loss)
@@ -187,8 +204,24 @@ def trainer(args, model, train_loader, valid_loader, test_loader, optimizer, los
               f'Test Acc: {test_acc:.3f}%\t',
               f'Test F1: {test_fscore:.3f}\t',
               
-              f'Time: {time.time()-start_time:.2f} sec'
+              f'Time: {time.time()-start_time:.2f} sec '
               )
+        
+        #### early stopping
+        min_delta = 0.01
+        patience = 5
+        
+        if e > 0:
+            if test_losses[-1] - test_losses[-2] > min_delta:
+                patience_cnt += 1
+            else:
+                patience_cnt = 0
+                
+            if patience_cnt > patience:
+                print("Early stopping at epoch: ", e)
+                break
+        else:
+            patience_cnt = 0
 
 
     train_metrics = {'train_losses': train_losses, 

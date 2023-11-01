@@ -5,25 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
-class SimpleAttention(nn.Module):
-
-    def __init__(self, input_dim):
-        super(SimpleAttention, self).__init__()
-        self.input_dim = input_dim
-        self.scalar = nn.Linear(self.input_dim,1,bias=False)
-
-    def forward(self, C):
-        scale = self.scalar(C) 
-        alpha = F.softmax(scale, dim=0).permute(1,2,0) 
-        attn_pool = torch.bmm(alpha, C.transpose(0,1))[:,0,:] 
-        return attn_pool, alpha
-
+from src.attention import SimpleAttention, MatchingAttention
 
 class EmotionGRUCell(nn.Module):
     """
         This class acts as a unit of EmotionRNN.
     """
-    def __init__(self, D_m, D_q, D_g, D_r, D_e, dropout = 0.5, **kwargs):
+    def __init__(self, D_m, D_q, D_g, D_r, D_e, dropout = 0.5, attention = 'simple', **kwargs):
         super(EmotionGRUCell, self).__init__( **kwargs)
         
         self.D_m = D_m # dimension of utterance 
@@ -49,7 +37,10 @@ class EmotionGRUCell(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # attention layer
-        self.attention = SimpleAttention(D_g)
+        if attention == 'simple':
+            self.attention = SimpleAttention(D_g) 
+        else:
+            self.attention = MatchingAttention(D_g, D_m, D_g, att_type=attention)
         
     def _select_parties(self, X, indexes):
         q0_sel = []
@@ -69,12 +60,11 @@ class EmotionGRUCell(nn.Module):
         
         ## global cumulative context state ##
         inp_g = torch.cat([q0_sel, r0_sel, U], dim=1)
-        
         if g_hist.size()[0] == 0:
             g_ = self.g_cell(inp_g, torch.zeros(U.size()[0], self.D_g).type(U.type()))
         else:
             g_ = self.g_cell(inp_g, g_hist[-1])
-        
+                    
         g_ = self.dropout(g_)
         
         ## context attention ##
@@ -82,7 +72,7 @@ class EmotionGRUCell(nn.Module):
             c_ = torch.zeros(U.size()[0], self.D_a).type(U.type())
             alpha = None
         else:
-            c_, alpha = self.attention(g_hist)
+            c_, alpha = self.attention(g_hist, U)
         
         
         ## intra speaker state ##
@@ -131,7 +121,7 @@ class EmotionRNN(nn.Module):
     This acts as a wrapper for EmotionGRUCell.
     Use this class to implement the EmotionRNN in the EmoNet.
     """
-    def __init__(self, D_m, D_q, D_g, D_r, D_e, dropout = 0.5, **kwargs):
+    def __init__(self, D_m, D_q, D_g, D_r, D_e, dropout = 0.5, attention = 'simple',**kwargs):
         super(EmotionRNN, self).__init__(**kwargs)
         
         self.D_m = D_m
@@ -142,7 +132,7 @@ class EmotionRNN(nn.Module):
         
         self.dropout = nn.Dropout(dropout)
         
-        self.cell = EmotionGRUCell(D_m, D_q, D_g, D_r, D_e, dropout)
+        self.cell = EmotionGRUCell(D_m, D_q, D_g, D_r, D_e, dropout, attention=attention)
         
     def forward(self, U, qmask):
         g_hist = torch.zeros(0).type(U.type())
@@ -171,8 +161,8 @@ class EmotionNet(nn.Module):
     architecture, saving, updating examples, and predicting emotions
     using the EmotionRNN and a two-layer MLP.
     """
-    def __init__(self, D_m, D_q, D_g, D_r, D_e, D_h, n_classes=7, dropout = 0.5):
-        super(EmotionNet, self).__init__()
+    def __init__(self, D_m, D_q, D_g, D_r, D_e, D_h, n_classes=7, dropout = 0.5, attention = 'simple', **kwargs):
+        super(EmotionNet, self).__init__(**kwargs)
         self.D_m = D_m
         self.D_q = D_q
         self.D_g = D_g
@@ -184,9 +174,9 @@ class EmotionNet(nn.Module):
         
         self.dropout = nn.Dropout(dropout)
         
-        self.emo_rnn_b = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout)
+        self.emo_rnn_b = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout,attention=attention)
         
-        self.emo_rnn_f = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout)
+        self.emo_rnn_f = EmotionRNN(D_m, D_q, D_g, D_r, D_e, dropout, attention=attention)
         
         # print(f'Linear input: {2 * D_e}')
         self.linear = nn.Linear(2 * D_e, D_h)
