@@ -166,3 +166,5 @@ audio/tmp/
 *.DS_Store
 .DS_Store
 
+code/audio/MELD_features/MELD_features_raw.pkl
+code/audio/MELD_features/logs/
