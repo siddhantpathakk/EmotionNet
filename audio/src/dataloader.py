@@ -70,19 +70,21 @@ def get_MELD_loaders(path, n_classes, batch_size=30, valid=0.1, num_workers=0, p
                               sampler=train_sampler,
                               collate_fn=trainset.collate_fn,
                               num_workers=num_workers,
-                              pin_memory=pin_memory)
+                              pin_memory=pin_memory,
+                              )
     valid_loader = DataLoader(trainset,
                               batch_size=batch_size,
                               sampler=valid_sampler,
                               collate_fn=trainset.collate_fn,
                               num_workers=num_workers,
-                              pin_memory=pin_memory)
+                              )
 
     testset = MELDDataset(split='test', path=path)
     test_loader = DataLoader(testset,
                              batch_size=batch_size,
                              collate_fn=testset.collate_fn,
                              num_workers=num_workers,
-                             pin_memory=pin_memory)
+                             pin_memory=pin_memory,
+                             shuffle=True)
 
     return train_loader, valid_loader, test_loader
