@@ -46,6 +46,8 @@ This project uses the MELD conversational dataset for training and testing. Ensu
   * `dataloader.py`: Code for loading and preprocessing data.
   * `attention.py`: Implementation of the attention mechanisms.
 * `train.ipynb`: Jupyter notebook for training the model.
+* `infer.ipynb`: Jupyter notebook for using the model for
+* `exploratory_data_analysis.ipynb`: Jupyter notebook for performing standard EDA about the MELD dataset.
 * `environment.yml`: Conda environment file for setting up the Python environment.
 * `LICENSE`: The license under which this project is distributed.
 * `README.md`: This file, describing the project and how to use it.
