@@ -150,9 +150,9 @@ def load_model_from_ckpt(model_ckpt="audio/MELD_features/models/EmoNet_31.pt"):
     return model
 
 
-def run_inference(model, acouf, qmask, umask):
+def run_inference(model, f, qmask, umask):
     
-    log_prob, _, _ = model(acouf, qmask,umask)
+    log_prob, _, _ = model(f, qmask,umask)
 
     lp_ = log_prob.transpose(0,1).contiguous().view(-1,log_prob.size()[2]) # batch*seq_len, n_classes
     pred_ = torch.argmax(lp_,1) # batch*seq_len

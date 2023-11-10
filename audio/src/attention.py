@@ -66,7 +66,6 @@ class MatchingAttention(nn.Module):
             alpha_masked = alpha_*mask.unsqueeze(1) # batch, 1, seqlen
             alpha_sum = torch.sum(alpha_masked, dim=2, keepdim=True) # batch, 1, 1
             alpha = alpha_masked/alpha_sum # batch, 1, 1 ; normalized
-            #import ipdb;ipdb.set_trace()
         else:
             M_ = M.transpose(0,1) # batch, seqlen, mem_dim
             x_ = x.unsqueeze(1).expand(-1,M.size()[0],-1) # batch, seqlen, cand_dim
